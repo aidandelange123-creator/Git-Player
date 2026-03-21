@@ -1,3 +1,4 @@
+"""GuestCraft Android helper launcher (CLI).
 """GuestCraft Android helper launcher.
 
 This script is intended for Android Python environments such as Termux.
@@ -17,6 +18,7 @@ from dataclasses import dataclass
 
 DEFAULT_PREFIX = "Guest"
 DEFAULT_LENGTH = 6
+BEDROCK_PACKAGE = "com.mojang.minecraftpe"
 
 
 @dataclass
@@ -40,6 +42,23 @@ def random_guest_name(prefix: str, length: int, exclude_ambiguous: bool) -> str:
     return f"{clean_prefix}_{token}"
 
 
+def _run_command(command: list[str]) -> tuple[bool, str]:
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    except OSError as exc:
+        return False, str(exc)
+    return completed.returncode == 0, (completed.stdout or completed.stderr or "").strip()
+
+
+def is_bedrock_installed() -> bool:
+    """Check Bedrock package via Android shell if possible."""
+    if not shutil.which("pm"):
+        return False
+
+    ok, output = _run_command(["pm", "list", "packages", BEDROCK_PACKAGE])
+    if not ok:
+        return False
+    return BEDROCK_PACKAGE in output
 def _run_command(command: list[str]) -> bool:
     try:
         completed = subprocess.run(command, check=False, capture_output=True, text=True)
@@ -52,6 +71,18 @@ def launch_minecraft_android() -> LaunchResult:
     """Launch Minecraft on Android using am/termux-open/webbrowser fallbacks."""
     uri = "minecraft://"
 
+    if not is_bedrock_installed():
+        return LaunchResult(False, f"Minecraft Bedrock ({BEDROCK_PACKAGE}) is not installed.")
+
+    if shutil.which("am"):
+        ok, _ = _run_command(["am", "start", "-a", "android.intent.action.VIEW", "-d", uri, BEDROCK_PACKAGE])
+        if ok:
+            return LaunchResult(True, "Opened minecraft:// with Android activity manager (am).")
+
+    if shutil.which("termux-open"):
+        ok, _ = _run_command(["termux-open", uri])
+        if ok:
+            return LaunchResult(True, "Opened minecraft:// using termux-open.")
     if shutil.which("am") and _run_command(["am", "start", "-a", "android.intent.action.VIEW", "-d", uri]):
         return LaunchResult(True, "Opened minecraft:// with Android activity manager (am).")
 
@@ -64,6 +95,7 @@ def launch_minecraft_android() -> LaunchResult:
     except webbrowser.Error:
         pass
 
+    return LaunchResult(False, "Unable to open minecraft:// even though Bedrock appears installed.")
     return LaunchResult(False, "Unable to open minecraft://. Install Minecraft and run from Termux or another Android shell.")
 
 
@@ -81,11 +113,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Only generate a guest name and do not open minecraft://",
     )
+    parser.add_argument(
+        "--check-bedrock",
+        action="store_true",
+        help="Only check if Minecraft Bedrock is installed",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+
+    if args.check_bedrock:
+        installed = is_bedrock_installed()
+        print("Bedrock installed" if installed else "Bedrock not installed")
+        return 0 if installed else 1
+
     name = random_guest_name(args.prefix, args.length, exclude_ambiguous=not args.allow_ambiguous)
 
     print("GuestCraft Android (legal helper)")
