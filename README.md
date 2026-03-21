@@ -43,6 +43,22 @@ It only helps you:
 - Copy generated name to clipboard
 - Reminder to use a legal 1.8.9 profile in the official launcher
 
+
+## Android helper (new)
+If you want a lightweight Android/Termux-friendly helper, use:
+
+```bash
+python guestcraft_launcher_android.py
+```
+
+Useful flags:
+- `--no-launch` generate a name only
+- `--prefix Guest` custom prefix
+- `--length 8` token size (3-16)
+- `--allow-ambiguous` allow `0/O/1/I`
+
+This Android script tries `am start`, then `termux-open`, then browser fallback with `minecraft://`.
+
 ## Requirements
 - Windows 10/11
 - Python 3.10+
