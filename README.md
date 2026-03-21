@@ -72,6 +72,20 @@ If you only need CLI behavior in Termux:
 ```bash
 python guestcraft_launcher_android.py --no-launch
 ```
+## Android helper (new)
+If you want a lightweight Android/Termux-friendly helper, use:
+
+```bash
+python guestcraft_launcher_android.py
+```
+
+Useful flags:
+- `--no-launch` generate a name only
+- `--prefix Guest` custom prefix
+- `--length 8` token size (3-16)
+- `--allow-ambiguous` allow `0/O/1/I`
+
+This Android script tries `am start`, then `termux-open`, then browser fallback with `minecraft://`.
 
 ## Requirements
 - Windows 10/11
