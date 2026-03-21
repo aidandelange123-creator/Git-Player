@@ -12,9 +12,11 @@ import subprocess
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox
+from typing import Optional
 
 APP_TITLE = "GuestCraft Launcher"
-WINDOW_SIZE = "520x320"
+WINDOW_SIZE = "560x380"
+SESSION_LIMIT_SECONDS = 60 * 60
 
 
 def random_guest_name() -> str:
@@ -22,7 +24,7 @@ def random_guest_name() -> str:
     return f"Guest_{token}"
 
 
-def launch_official_launcher() -> tuple[bool, str]:
+def launch_official_launcher() -> tuple[bool, str, Optional[subprocess.Popen]]:
     """Try known launcher locations, then fallback to minecraft:// URI."""
     local = Path(os.environ.get("LOCALAPPDATA", ""))
     program_files = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
@@ -36,15 +38,15 @@ def launch_official_launcher() -> tuple[bool, str]:
 
     for path in candidates:
         if path.exists():
-            subprocess.Popen([str(path)], shell=False)
-            return True, f"Launched: {path}"
+            process = subprocess.Popen([str(path)], shell=False)
+            return True, f"Launched: {path}", process
 
     try:
         # Windows URI scheme fallback
         os.startfile("minecraft://")  # type: ignore[attr-defined]
-        return True, "Opened minecraft:// URI"
+        return True, "Opened minecraft:// URI", None
     except OSError as exc:
-        return False, f"Could not open official launcher: {exc}"
+        return False, f"Could not open official launcher: {exc}", None
 
 
 class GuestCraftApp:
@@ -56,6 +58,9 @@ class GuestCraftApp:
 
         self.name_var = tk.StringVar(value=random_guest_name())
         self.status_var = tk.StringVar(value="Ready")
+        self.timer_var = tk.StringVar(value="Session timer: not running")
+        self.remaining_seconds = 0
+        self.tracked_process: Optional[subprocess.Popen] = None
 
         self._build_ui()
 
@@ -72,8 +77,8 @@ class GuestCraftApp:
         tk.Label(
             frame,
             text=(
-                "Legal helper only: generates a random guest name and starts the\n"
-                "official Minecraft Launcher."
+                "Legal helper only: generates a random guest name, starts the official\n"
+                "Minecraft Launcher, and optionally enforces a 1-hour play session."
             ),
             fg="#444",
             justify="left",
@@ -125,9 +130,25 @@ class GuestCraftApp:
             relief="raised",
         ).pack(side="left")
 
+        tk.Label(
+            frame,
+            text="Tip: In the official launcher, create a profile for release 1.8.9.",
+            fg="#2d4a8f",
+            justify="left",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(8, 6))
+
+        tk.Label(
+            frame,
+            textvariable=self.timer_var,
+            fg="#333",
+            justify="left",
+            font=("Consolas", 10, "bold"),
+        ).pack(anchor="w", pady=(2, 6))
+
         legal_text = (
-            "This app does not crack Minecraft, bypass account checks, or provide\n"
-            "paid game access for free. Use a legitimate account."
+            "This app does not crack Minecraft, bypass account checks, or provide paid\n"
+            "game access for free. Use a legitimate account."
         )
         tk.Label(frame, text=legal_text, fg="#7a1f1f", justify="left", font=("Segoe UI", 9)).pack(
             anchor="w", pady=(20, 8)
@@ -156,10 +177,34 @@ class GuestCraftApp:
         self.status_var.set(f"Copied '{name}' to clipboard")
 
     def on_launch(self) -> None:
-        ok, msg = launch_official_launcher()
+        ok, msg, process = launch_official_launcher()
         self.status_var.set(msg)
         if not ok:
             messagebox.showerror(APP_TITLE, msg)
+            return
+
+        self.tracked_process = process
+        self.start_session_timer()
+
+    def start_session_timer(self) -> None:
+        self.remaining_seconds = SESSION_LIMIT_SECONDS
+        self._update_timer()
+
+    def _update_timer(self) -> None:
+        if self.remaining_seconds <= 0:
+            self.timer_var.set("Session timer: ended")
+            if self.tracked_process and self.tracked_process.poll() is None:
+                self.tracked_process.terminate()
+                self.status_var.set("1-hour limit reached. Closed tracked launcher process.")
+                messagebox.showinfo(APP_TITLE, "1-hour limit reached. Closed tracked launcher process.")
+            else:
+                self.status_var.set("1-hour limit reached.")
+            return
+
+        minutes, seconds = divmod(self.remaining_seconds, 60)
+        self.timer_var.set(f"Session timer: {minutes:02d}:{seconds:02d}")
+        self.remaining_seconds -= 1
+        self.root.after(1000, self._update_timer)
 
 
 def main() -> None:
