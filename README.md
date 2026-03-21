@@ -43,6 +43,36 @@ It only helps you:
 - Copy generated name to clipboard
 - Reminder to use a legal 1.8.9 profile in the official launcher
 
+
+## Android APK launcher
+This repository now includes an Android app entrypoint (`guestcraft_android_app.py`) that:
+- checks whether **Minecraft Bedrock** (`com.mojang.minecraftpe`) is installed,
+- launches Bedrock using Android intents,
+- generates a custom player name,
+- includes a **Mouse Mode** toggle with on-screen directional/click buttons.
+
+### Android source files
+- `guestcraft_android_app.py` (Kivy app for Android)
+- `buildozer.spec` (APK build configuration)
+- `guestcraft_launcher_android.py` (CLI fallback helper)
+
+### Build APK
+On Linux with Buildozer + Android SDK/NDK installed:
+
+```bash
+pip install buildozer cython
+buildozer -v android debug
+```
+
+Generated APK output:
+- `bin/*.apk`
+
+If you only need CLI behavior in Termux:
+
+```bash
+python guestcraft_launcher_android.py --no-launch
+```
+
 ## Requirements
 - Windows 10/11
 - Python 3.10+
