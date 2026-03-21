@@ -1,4 +1,3 @@
-"""GuestCraft Android helper launcher (CLI).
 """GuestCraft Android helper launcher.
 
 This script is intended for Android Python environments such as Termux.
@@ -47,7 +46,8 @@ def _run_command(command: list[str]) -> tuple[bool, str]:
         completed = subprocess.run(command, check=False, capture_output=True, text=True)
     except OSError as exc:
         return False, str(exc)
-    return completed.returncode == 0, (completed.stdout or completed.stderr or "").strip()
+    output = (completed.stdout or completed.stderr or "").strip()
+    return completed.returncode == 0, output
 
 
 def is_bedrock_installed() -> bool:
@@ -56,15 +56,7 @@ def is_bedrock_installed() -> bool:
         return False
 
     ok, output = _run_command(["pm", "list", "packages", BEDROCK_PACKAGE])
-    if not ok:
-        return False
-    return BEDROCK_PACKAGE in output
-def _run_command(command: list[str]) -> bool:
-    try:
-        completed = subprocess.run(command, check=False, capture_output=True, text=True)
-    except OSError:
-        return False
-    return completed.returncode == 0
+    return ok and BEDROCK_PACKAGE in output
 
 
 def launch_minecraft_android() -> LaunchResult:
@@ -83,11 +75,6 @@ def launch_minecraft_android() -> LaunchResult:
         ok, _ = _run_command(["termux-open", uri])
         if ok:
             return LaunchResult(True, "Opened minecraft:// using termux-open.")
-    if shutil.which("am") and _run_command(["am", "start", "-a", "android.intent.action.VIEW", "-d", uri]):
-        return LaunchResult(True, "Opened minecraft:// with Android activity manager (am).")
-
-    if shutil.which("termux-open") and _run_command(["termux-open", uri]):
-        return LaunchResult(True, "Opened minecraft:// using termux-open.")
 
     try:
         if webbrowser.open(uri):
@@ -96,7 +83,6 @@ def launch_minecraft_android() -> LaunchResult:
         pass
 
     return LaunchResult(False, "Unable to open minecraft:// even though Bedrock appears installed.")
-    return LaunchResult(False, "Unable to open minecraft://. Install Minecraft and run from Termux or another Android shell.")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
