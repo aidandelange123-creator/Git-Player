@@ -19,7 +19,8 @@ from typing import Optional
 
 APP_TITLE = "GuestCraft Launcher"
 WINDOW_SIZE = "860x560"
-DEFAULT_SESSION_MINUTES = 60
+DEFAULT_SESSION_MINUTES = 90
+DEFAULT_LAUNCH_DELAY_SECONDS = 20
 SETTINGS_PATH = Path("guestcraft_settings.json")
 
 
@@ -33,6 +34,7 @@ class GuestCraftApp:
         self.tracked_process: Optional[subprocess.Popen] = None
         self.remaining_seconds = 0
         self.timer_job: Optional[str] = None
+        self.session_start_job: Optional[str] = None
         self.last_launch_ts = 0.0
         self.logs: list[str] = []
         self.name_history: list[str] = []
@@ -43,6 +45,7 @@ class GuestCraftApp:
         self.auto_copy_var = tk.BooleanVar(value=False)
         self.beep_var = tk.BooleanVar(value=True)
         self.session_minutes_var = tk.IntVar(value=DEFAULT_SESSION_MINUTES)
+        self.launch_delay_seconds_var = tk.IntVar(value=DEFAULT_LAUNCH_DELAY_SECONDS)
 
         self.name_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Ready")
@@ -186,6 +189,23 @@ class GuestCraftApp:
             return
 
         self.tracked_process = process
+        self.start_session_timer_with_delay()
+
+    def start_session_timer_with_delay(self) -> None:
+        self.cancel_timer_job()
+        self.cancel_session_start_job()
+        delay = max(0, int(self.launch_delay_seconds_var.get()))
+        if delay == 0:
+            self.start_session_timer()
+            return
+
+        self.status_var.set(f"Launcher opened. Waiting {delay}s before session timer starts.")
+        self.timer_var.set(f"Session timer: starts in {delay:02d}s")
+        self.session_start_job = self.root.after(delay * 1000, self._begin_delayed_session_timer)
+        self.log(f"Applying launch delay before timer start: {delay} seconds")
+
+    def _begin_delayed_session_timer(self) -> None:
+        self.session_start_job = None
         self.start_session_timer()
 
     def start_session_timer(self) -> None:
@@ -200,8 +220,14 @@ class GuestCraftApp:
             self.root.after_cancel(self.timer_job)
             self.timer_job = None
 
+    def cancel_session_start_job(self) -> None:
+        if self.session_start_job is not None:
+            self.root.after_cancel(self.session_start_job)
+            self.session_start_job = None
+
     def pause_timer(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.status_var.set("Timer paused")
         self.log("Timer paused")
 
@@ -216,6 +242,7 @@ class GuestCraftApp:
 
     def stop_timer(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.remaining_seconds = 0
         self.timer_var.set("Session timer: stopped")
         self.status_var.set("Timer stopped")
@@ -274,6 +301,7 @@ class GuestCraftApp:
             "auto_copy": bool(self.auto_copy_var.get()),
             "beep": bool(self.beep_var.get()),
             "session_minutes": int(self.session_minutes_var.get()),
+            "launch_delay_seconds": int(self.launch_delay_seconds_var.get()),
             "history": self.name_history[:20],
         }
         SETTINGS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -292,6 +320,7 @@ class GuestCraftApp:
             self.auto_copy_var.set(bool(data.get("auto_copy", False)))
             self.beep_var.set(bool(data.get("beep", True)))
             self.session_minutes_var.set(max(1, int(data.get("session_minutes", DEFAULT_SESSION_MINUTES))))
+            self.launch_delay_seconds_var.set(max(0, int(data.get("launch_delay_seconds", DEFAULT_LAUNCH_DELAY_SECONDS))))
 
             self.name_history = list(data.get("history", []))[:20]
             self.history_list.delete(0, "end")
@@ -303,6 +332,7 @@ class GuestCraftApp:
 
     def on_close(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.save_settings()
         self.root.destroy()
 
@@ -369,6 +399,8 @@ class GuestCraftApp:
 
         tk.Label(right, text="Session length (minutes)").pack(anchor="w", pady=(12, 0))
         tk.Spinbox(right, from_=1, to=240, textvariable=self.session_minutes_var, width=8).pack(anchor="w")
+        tk.Label(right, text="Launch delay before timer (seconds)").pack(anchor="w", pady=(8, 0))
+        tk.Spinbox(right, from_=0, to=180, textvariable=self.launch_delay_seconds_var, width=8).pack(anchor="w")
 
         presets = tk.Frame(right)
         presets.pack(anchor="w", pady=(8, 0))

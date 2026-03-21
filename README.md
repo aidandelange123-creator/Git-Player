@@ -17,7 +17,8 @@ It only helps you:
 - Name history panel (up to 20 recent names)
 - Launcher path detection + URI fallback (`minecraft://`)
 - Open `.minecraft` folder shortcut
-- Session-length selector with 15m / 30m / 60m presets
+- Session-length selector with 15m / 30m / 60m presets (default: 90 minutes)
+- Launch-delay control so the timer can start after Minecraft has time to load
 - Timer pause/resume/stop controls
 - Activity log + export logs to file
 - Settings persistence in `guestcraft_settings.json`
