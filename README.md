@@ -14,6 +14,7 @@ This tool **does not bypass Microsoft/Mojang authentication** and **does not pro
 - Launch delay before timer start (helps when launcher/game startup is slow)
 - Activity log + export
 - Settings persistence (`guestcraft_settings.json`)
+- Safer numeric input handling for timer/name controls (invalid values auto-corrected)
 
 ## Licensed 1.8.8 JAR upload flow
 GuestCraft includes a **licensed JAR verification step** for Minecraft `1.8.8` uploads:

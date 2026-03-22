@@ -81,9 +81,21 @@ class GuestCraftApp:
                 chars = chars.replace(bad, "")
         return chars
 
+    @staticmethod
+    def _safe_int(value: object, fallback: int, minimum: Optional[int] = None, maximum: Optional[int] = None) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError, tk.TclError):
+            parsed = fallback
+        if minimum is not None:
+            parsed = max(minimum, parsed)
+        if maximum is not None:
+            parsed = min(maximum, parsed)
+        return parsed
+
     def random_guest_name(self) -> str:
         prefix = self.prefix_var.get().strip() or "Guest"
-        length = max(3, min(16, int(self.length_var.get())))
+        length = self._safe_int(self.length_var.get(), fallback=6, minimum=3, maximum=16)
         chars = self._build_charset(self.ambiguous_var.get())
         token = "".join(random.choices(chars, k=length))
         return f"{prefix}_{token}"
@@ -103,7 +115,7 @@ class GuestCraftApp:
         custom = self.custom_launcher_path_var.get().strip()
         if custom:
             custom_path = Path(custom)
-            if custom_path.exists():
+            if custom_path.exists() and custom_path.is_file():
                 return custom_path
         for path in self.known_launcher_paths():
             if path.exists():
@@ -205,7 +217,7 @@ class GuestCraftApp:
     def start_session_timer_with_delay(self) -> None:
         self.cancel_timer_job()
         self.cancel_session_start_job()
-        delay = max(0, int(self.launch_delay_seconds_var.get()))
+        delay = self._safe_int(self.launch_delay_seconds_var.get(), fallback=DEFAULT_LAUNCH_DELAY_SECONDS, minimum=0)
         self.launch_delay_remaining = delay
         if delay == 0:
             self.start_session_timer()
@@ -230,9 +242,10 @@ class GuestCraftApp:
     def start_session_timer(self) -> None:
         # Cancel previous timer before starting a new one.
         self.cancel_timer_job()
-        self.remaining_seconds = max(1, int(self.session_minutes_var.get()) * 60)
+        minutes = self._safe_int(self.session_minutes_var.get(), fallback=DEFAULT_SESSION_MINUTES, minimum=1)
+        self.remaining_seconds = minutes * 60
         self._update_timer()
-        self.log(f"Session timer started: {self.session_minutes_var.get()} minutes")
+        self.log(f"Session timer started: {minutes} minutes")
 
     def cancel_timer_job(self) -> None:
         if self.timer_job is not None:
@@ -388,12 +401,14 @@ class GuestCraftApp:
     def save_settings(self) -> None:
         data = {
             "prefix": self.prefix_var.get(),
-            "length": int(self.length_var.get()),
+            "length": self._safe_int(self.length_var.get(), fallback=6, minimum=3, maximum=16),
             "exclude_ambiguous": bool(self.ambiguous_var.get()),
             "auto_copy": bool(self.auto_copy_var.get()),
             "beep": bool(self.beep_var.get()),
-            "session_minutes": int(self.session_minutes_var.get()),
-            "launch_delay_seconds": int(self.launch_delay_seconds_var.get()),
+            "session_minutes": self._safe_int(self.session_minutes_var.get(), fallback=DEFAULT_SESSION_MINUTES, minimum=1),
+            "launch_delay_seconds": self._safe_int(
+                self.launch_delay_seconds_var.get(), fallback=DEFAULT_LAUNCH_DELAY_SECONDS, minimum=0
+            ),
             "custom_launcher_path": self.custom_launcher_path_var.get().strip(),
             "licensed_jar_path": str(self.selected_jar_path) if self.selected_jar_path else "",
             "history": self.name_history[:20],
@@ -409,12 +424,20 @@ class GuestCraftApp:
         try:
             data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
             self.prefix_var.set(data.get("prefix", "Guest"))
-            self.length_var.set(int(data.get("length", 6)))
+            self.length_var.set(self._safe_int(data.get("length", 6), fallback=6, minimum=3, maximum=16))
             self.ambiguous_var.set(bool(data.get("exclude_ambiguous", True)))
             self.auto_copy_var.set(bool(data.get("auto_copy", False)))
             self.beep_var.set(bool(data.get("beep", True)))
-            self.session_minutes_var.set(max(1, int(data.get("session_minutes", DEFAULT_SESSION_MINUTES))))
-            self.launch_delay_seconds_var.set(max(0, int(data.get("launch_delay_seconds", DEFAULT_LAUNCH_DELAY_SECONDS))))
+            self.session_minutes_var.set(
+                self._safe_int(data.get("session_minutes", DEFAULT_SESSION_MINUTES), fallback=DEFAULT_SESSION_MINUTES, minimum=1)
+            )
+            self.launch_delay_seconds_var.set(
+                self._safe_int(
+                    data.get("launch_delay_seconds", DEFAULT_LAUNCH_DELAY_SECONDS),
+                    fallback=DEFAULT_LAUNCH_DELAY_SECONDS,
+                    minimum=0,
+                )
+            )
             self.custom_launcher_path_var.set(str(data.get("custom_launcher_path", "")).strip())
             saved_jar = str(data.get("licensed_jar_path", "")).strip()
             if saved_jar and Path(saved_jar).exists():
