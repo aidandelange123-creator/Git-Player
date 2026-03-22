@@ -19,46 +19,9 @@ from typing import Optional
 
 APP_TITLE = "GuestCraft Launcher"
 WINDOW_SIZE = "860x560"
-DEFAULT_SESSION_MINUTES = 60
+DEFAULT_SESSION_MINUTES = 90
+DEFAULT_LAUNCH_DELAY_SECONDS = 20
 SETTINGS_PATH = Path("guestcraft_settings.json")
-import tkinter as tk
-from pathlib import Path
-from tkinter import messagebox
-from typing import Optional
-
-APP_TITLE = "GuestCraft Launcher"
-WINDOW_SIZE = "560x380"
-SESSION_LIMIT_SECONDS = 60 * 60
-
-
-def random_guest_name() -> str:
-    token = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"Guest_{token}"
-
-
-def launch_official_launcher() -> tuple[bool, str, Optional[subprocess.Popen]]:
-    """Try known launcher locations, then fallback to minecraft:// URI."""
-    local = Path(os.environ.get("LOCALAPPDATA", ""))
-    program_files = Path(os.environ.get("ProgramFiles", "C:/Program Files"))
-    program_files_x86 = Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
-
-    candidates = [
-        local / "Programs/Minecraft Launcher/MinecraftLauncher.exe",
-        program_files / "Minecraft Launcher/MinecraftLauncher.exe",
-        program_files_x86 / "Minecraft Launcher/MinecraftLauncher.exe",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            process = subprocess.Popen([str(path)], shell=False)
-            return True, f"Launched: {path}", process
-
-    try:
-        # Windows URI scheme fallback
-        os.startfile("minecraft://")  # type: ignore[attr-defined]
-        return True, "Opened minecraft:// URI", None
-    except OSError as exc:
-        return False, f"Could not open official launcher: {exc}", None
 
 
 class GuestCraftApp:
@@ -71,6 +34,7 @@ class GuestCraftApp:
         self.tracked_process: Optional[subprocess.Popen] = None
         self.remaining_seconds = 0
         self.timer_job: Optional[str] = None
+        self.session_start_job: Optional[str] = None
         self.last_launch_ts = 0.0
         self.logs: list[str] = []
         self.name_history: list[str] = []
@@ -81,6 +45,7 @@ class GuestCraftApp:
         self.auto_copy_var = tk.BooleanVar(value=False)
         self.beep_var = tk.BooleanVar(value=True)
         self.session_minutes_var = tk.IntVar(value=DEFAULT_SESSION_MINUTES)
+        self.launch_delay_seconds_var = tk.IntVar(value=DEFAULT_LAUNCH_DELAY_SECONDS)
 
         self.name_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Ready")
@@ -170,123 +135,7 @@ class GuestCraftApp:
             self.status_var.set("Nothing to copy")
             self.log("Copy skipped: empty name")
             return
-        self.root.resizable(False, False)
 
-        self.name_var = tk.StringVar(value=random_guest_name())
-        self.status_var = tk.StringVar(value="Ready")
-        self.timer_var = tk.StringVar(value="Session timer: not running")
-        self.remaining_seconds = 0
-        self.tracked_process: Optional[subprocess.Popen] = None
-
-        self._build_ui()
-
-    def _build_ui(self) -> None:
-        frame = tk.Frame(self.root, padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
-
-        tk.Label(
-            frame,
-            text="GuestCraft Launcher",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(anchor="w")
-
-        tk.Label(
-            frame,
-            text=(
-                "Legal helper only: generates a random guest name, starts the official\n"
-                "Minecraft Launcher, and optionally enforces a 1-hour play session."
-            ),
-            fg="#444",
-            justify="left",
-            font=("Segoe UI", 10),
-        ).pack(anchor="w", pady=(6, 16))
-
-        entry_row = tk.Frame(frame)
-        entry_row.pack(fill="x")
-
-        tk.Label(entry_row, text="Guest Name:", font=("Segoe UI", 10, "bold")).pack(side="left")
-
-        self.name_entry = tk.Entry(
-            entry_row,
-            textvariable=self.name_var,
-            font=("Consolas", 12),
-            width=22,
-            justify="center",
-        )
-        self.name_entry.pack(side="left", padx=(8, 0))
-
-        btn_row = tk.Frame(frame)
-        btn_row.pack(fill="x", pady=(14, 8))
-
-        tk.Button(
-            btn_row,
-            text="Randomize Name",
-            command=self.on_randomize,
-            width=18,
-            font=("Segoe UI", 10),
-        ).pack(side="left")
-
-        tk.Button(
-            btn_row,
-            text="Copy Name",
-            command=self.on_copy,
-            width=12,
-            font=("Segoe UI", 10),
-        ).pack(side="left", padx=8)
-
-        tk.Button(
-            btn_row,
-            text="Launch Minecraft",
-            command=self.on_launch,
-            width=16,
-            font=("Segoe UI", 10, "bold"),
-            bg="#4CAF50",
-            fg="white",
-            activebackground="#449d48",
-            relief="raised",
-        ).pack(side="left")
-
-        tk.Label(
-            frame,
-            text="Tip: In the official launcher, create a profile for release 1.8.9.",
-            fg="#2d4a8f",
-            justify="left",
-            font=("Segoe UI", 9),
-        ).pack(anchor="w", pady=(8, 6))
-
-        tk.Label(
-            frame,
-            textvariable=self.timer_var,
-            fg="#333",
-            justify="left",
-            font=("Consolas", 10, "bold"),
-        ).pack(anchor="w", pady=(2, 6))
-
-        legal_text = (
-            "This app does not crack Minecraft, bypass account checks, or provide paid\n"
-            "game access for free. Use a legitimate account."
-        )
-        tk.Label(frame, text=legal_text, fg="#7a1f1f", justify="left", font=("Segoe UI", 9)).pack(
-            anchor="w", pady=(20, 8)
-        )
-
-        status = tk.Label(
-            frame,
-            textvariable=self.status_var,
-            bd=1,
-            relief="sunken",
-            anchor="w",
-            padx=8,
-            font=("Segoe UI", 9),
-        )
-        status.pack(fill="x", side="bottom")
-
-    def on_randomize(self) -> None:
-        self.name_var.set(random_guest_name())
-        self.status_var.set("Generated a new guest name")
-
-    def on_copy(self) -> None:
-        name = self.name_var.get().strip()
         self.root.clipboard_clear()
         self.root.clipboard_append(name)
         self.root.update()
@@ -324,7 +173,7 @@ class GuestCraftApp:
             return False, f"Could not open official launcher: {exc}", None
 
     def on_launch(self) -> None:
-        # Bug fix: prevent accidental double-launch spam
+        # Prevent accidental double-launch spam.
         now = time.time()
         if now - self.last_launch_ts < 2.0:
             self.status_var.set("Please wait a moment before launching again")
@@ -335,18 +184,32 @@ class GuestCraftApp:
         self.status_var.set(msg)
         self.log(msg)
 
-    def on_launch(self) -> None:
-        ok, msg, process = launch_official_launcher()
-        self.status_var.set(msg)
         if not ok:
             messagebox.showerror(APP_TITLE, msg)
             return
 
         self.tracked_process = process
+        self.start_session_timer_with_delay()
+
+    def start_session_timer_with_delay(self) -> None:
+        self.cancel_timer_job()
+        self.cancel_session_start_job()
+        delay = max(0, int(self.launch_delay_seconds_var.get()))
+        if delay == 0:
+            self.start_session_timer()
+            return
+
+        self.status_var.set(f"Launcher opened. Waiting {delay}s before session timer starts.")
+        self.timer_var.set(f"Session timer: starts in {delay:02d}s")
+        self.session_start_job = self.root.after(delay * 1000, self._begin_delayed_session_timer)
+        self.log(f"Applying launch delay before timer start: {delay} seconds")
+
+    def _begin_delayed_session_timer(self) -> None:
+        self.session_start_job = None
         self.start_session_timer()
 
     def start_session_timer(self) -> None:
-        # Bug fix: cancel previous timer before starting new one
+        # Cancel previous timer before starting a new one.
         self.cancel_timer_job()
         self.remaining_seconds = max(1, int(self.session_minutes_var.get()) * 60)
         self._update_timer()
@@ -357,8 +220,14 @@ class GuestCraftApp:
             self.root.after_cancel(self.timer_job)
             self.timer_job = None
 
+    def cancel_session_start_job(self) -> None:
+        if self.session_start_job is not None:
+            self.root.after_cancel(self.session_start_job)
+            self.session_start_job = None
+
     def pause_timer(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.status_var.set("Timer paused")
         self.log("Timer paused")
 
@@ -373,6 +242,7 @@ class GuestCraftApp:
 
     def stop_timer(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.remaining_seconds = 0
         self.timer_var.set("Session timer: stopped")
         self.status_var.set("Timer stopped")
@@ -394,7 +264,7 @@ class GuestCraftApp:
                 try:
                     self.tracked_process.terminate()
                     self.status_var.set("Time up. Closed tracked launcher process.")
-                    messagebox.showinfo(APP_TITLE, "1-hour limit reached. Closed tracked launcher process.")
+                    messagebox.showinfo(APP_TITLE, "Session limit reached. Closed tracked launcher process.")
                     self.log("Session ended: tracked launcher process terminated")
                 except OSError as exc:
                     self.status_var.set("Time up, but process could not be closed")
@@ -402,18 +272,6 @@ class GuestCraftApp:
             else:
                 self.status_var.set("Time up.")
                 self.log("Session ended (no tracked process available)")
-        self.remaining_seconds = SESSION_LIMIT_SECONDS
-        self._update_timer()
-
-    def _update_timer(self) -> None:
-        if self.remaining_seconds <= 0:
-            self.timer_var.set("Session timer: ended")
-            if self.tracked_process and self.tracked_process.poll() is None:
-                self.tracked_process.terminate()
-                self.status_var.set("1-hour limit reached. Closed tracked launcher process.")
-                messagebox.showinfo(APP_TITLE, "1-hour limit reached. Closed tracked launcher process.")
-            else:
-                self.status_var.set("1-hour limit reached.")
             return
 
         minutes, seconds = divmod(self.remaining_seconds, 60)
@@ -443,6 +301,7 @@ class GuestCraftApp:
             "auto_copy": bool(self.auto_copy_var.get()),
             "beep": bool(self.beep_var.get()),
             "session_minutes": int(self.session_minutes_var.get()),
+            "launch_delay_seconds": int(self.launch_delay_seconds_var.get()),
             "history": self.name_history[:20],
         }
         SETTINGS_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -461,6 +320,7 @@ class GuestCraftApp:
             self.auto_copy_var.set(bool(data.get("auto_copy", False)))
             self.beep_var.set(bool(data.get("beep", True)))
             self.session_minutes_var.set(max(1, int(data.get("session_minutes", DEFAULT_SESSION_MINUTES))))
+            self.launch_delay_seconds_var.set(max(0, int(data.get("launch_delay_seconds", DEFAULT_LAUNCH_DELAY_SECONDS))))
 
             self.name_history = list(data.get("history", []))[:20]
             self.history_list.delete(0, "end")
@@ -472,6 +332,7 @@ class GuestCraftApp:
 
     def on_close(self) -> None:
         self.cancel_timer_job()
+        self.cancel_session_start_job()
         self.save_settings()
         self.root.destroy()
 
@@ -538,6 +399,8 @@ class GuestCraftApp:
 
         tk.Label(right, text="Session length (minutes)").pack(anchor="w", pady=(12, 0))
         tk.Spinbox(right, from_=1, to=240, textvariable=self.session_minutes_var, width=8).pack(anchor="w")
+        tk.Label(right, text="Launch delay before timer (seconds)").pack(anchor="w", pady=(8, 0))
+        tk.Spinbox(right, from_=0, to=180, textvariable=self.launch_delay_seconds_var, width=8).pack(anchor="w")
 
         presets = tk.Frame(right)
         presets.pack(anchor="w", pady=(8, 0))
@@ -580,8 +443,7 @@ class GuestCraftApp:
         legal = tk.Label(
             container,
             text=(
-                "This app does not crack Minecraft or bypass account checks. "
-                "Use a legitimate account.\n"
+                "This app does not crack Minecraft or bypass account checks. Use a legitimate account.\n"
                 "For older versions, create a legal release profile (for example 1.8.9) in the official launcher."
             ),
             fg="#7a1f1f",
@@ -589,19 +451,17 @@ class GuestCraftApp:
         )
         legal.pack(anchor="w", pady=(8, 2))
 
-        status = tk.Label(container, textvariable=self.status_var, bd=1, relief="sunken", anchor="w", padx=8)
-        status.pack(fill="x", side="bottom")
-
         launch_mode = tk.Label(container, textvariable=self.launch_mode_var, anchor="w", fg="#2d4a8f")
         launch_mode.pack(fill="x", side="bottom")
-        self.root.after(1000, self._update_timer)
+
+        status = tk.Label(container, textvariable=self.status_var, bd=1, relief="sunken", anchor="w", padx=8)
+        status.pack(fill="x", side="bottom")
 
 
 def main() -> None:
     root = tk.Tk()
     app = GuestCraftApp(root)
     root.protocol("WM_DELETE_WINDOW", app.on_close)
-    GuestCraftApp(root)
     root.mainloop()
 
 
